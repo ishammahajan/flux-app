@@ -1,0 +1,19 @@
+{
+    "name": "flux-app",
+    "version": "1.0.0",
+    "description": "FLUX Task Manager - Designed for AuADHD neurotypes",
+    "private": true,
+    "scripts": {
+        "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+        "dev:frontend": "cd frontend && npm run dev",
+        "dev:backend": "cd backend && npm run dev",
+        "build": "cd frontend && npm run build",
+        "lint": "cd frontend && npm run lint",
+        "start": "cd backend && npm run start",
+        "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install",
+        "clean": "rm -rf node_modules frontend/node_modules frontend/dist backend/node_modules backend/tasks.db"
+    },
+    "devDependencies": {
+        "concurrently": "^9.1.2"
+    }
+}

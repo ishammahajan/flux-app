@@ -1,0 +1,53 @@
+{
+    "id": "ishamm",
+    "password": "flux2024",
+    "display_name": "Isham",
+    "timezone": "Asia/Kolkata",
+    "high_gravity_keywords": [
+        "call",
+        "cancel",
+        "dispute",
+        "clean",
+        "sort out",
+        "phone",
+        "confront",
+        "complain"
+    ],
+    "low_gravity_keywords": [
+        "write",
+        "code",
+        "design",
+        "research",
+        "read",
+        "build",
+        "create",
+        "draw"
+    ],
+    "deepgram_keywords": [
+        "Abhutia",
+        "FLUX"
+    ],
+    "projects": [
+        {
+            "name": "Abhutia",
+            "color": "#8B5CF6",
+            "description": "Book writing project - creative fiction work"
+        },
+        {
+            "name": "Work",
+            "color": "#3B82F6",
+            "description": "Day job tasks and professional responsibilities"
+        },
+        {
+            "name": "Health",
+            "color": "#10B981",
+            "description": "Personal health, fitness, and wellbeing tasks"
+        },
+        {
+            "name": "Admin",
+            "color": "#F59E0B",
+            "description": "Bills, paperwork, bureaucracy, and life admin"
+        }
+    ],
+    "known_people": []
+}
