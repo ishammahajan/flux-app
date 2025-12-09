@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const db = require('./database');
 const { processAudioEntry } = require('./services/magicMic');
 const progressEmitter = require('./services/progressEmitter');
+const { breakdownTask, getShardsByParentId, checkAndCompleteParent } = require('./services/magicBreakdown');
 
 dotenv.config();
 
@@ -210,7 +211,7 @@ app.get('/api/tasks/:id', (req, res) => {
 });
 
 // Update Task (Status, Gravity, Project, Due Date, Tags)
-app.patch('/api/tasks/:id', (req, res) => {
+app.patch('/api/tasks/:id', async (req, res) => {
     const { id } = req.params;
     const { status, gravity_tag, project_id, due_date, tags } = req.body;
 
@@ -244,15 +245,43 @@ app.patch('/api/tasks/:id', (req, res) => {
 
     params.push(id);
 
-    db.run(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`, params, function (err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (this.changes === 0) {
+    try {
+        // First, get the task to check if it's a shard
+        const task = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM tasks WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!task) {
             return res.status(404).json({ error: 'Task not found' });
         }
-        res.json({ message: 'Task updated', changes: this.changes });
-    });
+
+        // Update the task
+        await new Promise((resolve, reject) => {
+            db.run(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`, params, function (err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+
+        // If this is a shard and status changed to 'complete', check if parent should be completed
+        let parentCompleted = false;
+        if (status === 'complete' && task.parent_task_id) {
+            parentCompleted = await checkAndCompleteParent(task.parent_task_id, db);
+        }
+
+        res.json({
+            message: 'Task updated',
+            parentCompleted,
+            parentTaskId: parentCompleted ? task.parent_task_id : null
+        });
+
+    } catch (error) {
+        console.error('[Task Update] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Log task corrections (for AI learning)
@@ -313,20 +342,78 @@ app.get('/api/tasks/corrections/recent', (req, res) => {
     });
 });
 
-// Magic Breakdown (Mock AI)
-app.post('/api/tasks/breakdown', (req, res) => {
-    const { taskId, content } = req.body;
+// =============================================================================
+// MAGIC BREAKDOWN - AI-Powered Task Decomposition
+// =============================================================================
 
-    // Mock breakdown logic: Split by words or just add sub-steps
-    const steps = [
-        `Prepare to ${content}`,
-        `Do the first part of ${content}`,
-        `Finish ${content}`
-    ];
+/**
+ * Break down a complex task into actionable shards
+ * POST /api/tasks/:id/breakdown
+ */
+app.post('/api/tasks/:id/breakdown', async (req, res) => {
+    const { id } = req.params;
+    const userId = req.body.userId || 'ishamm';
 
-    // In a real app, we would insert these as new tasks linked to the parent
-    // For now, just return them as suggestions
-    res.json({ steps });
+    try {
+        // Fetch parent task
+        const parentTask = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM tasks WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!parentTask) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        // Check if already broken down
+        const existingShards = await getShardsByParentId(id, db);
+        if (existingShards.length > 0) {
+            return res.json({
+                success: true,
+                shards: existingShards,
+                message: 'Task already decomposed',
+                parentTask: { id: parentTask.id, title: parentTask.title }
+            });
+        }
+
+        // Perform AI breakdown
+        const result = await breakdownTask(parentTask, userId, db);
+
+        res.json(result);
+
+    } catch (error) {
+        console.error('[Magic Breakdown] Error:', error);
+
+        if (error.message.includes('OPENROUTER_API_KEY')) {
+            return res.status(503).json({
+                success: false,
+                error: 'LLM service not configured'
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Failed to break down task',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * Get shards for a parent task
+ * GET /api/tasks/:id/shards
+ */
+app.get('/api/tasks/:id/shards', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const shards = await getShardsByParentId(id, db);
+        res.json({ shards });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Jettison (Reset all active to inbox)

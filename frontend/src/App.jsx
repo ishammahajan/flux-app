@@ -5,6 +5,7 @@ import Vault from './components/Vault';
 import Airlock from './components/Airlock';
 import Login from './components/Login';
 import TaskDetails from './components/TaskDetails';
+import BreakdownAnimation from './components/BreakdownAnimation';
 
 function App() {
   // Auth state
@@ -45,6 +46,11 @@ function App() {
   // Task details modal state
   const [selectedTask, setSelectedTask] = useState(null);
   const [userProjects, setUserProjects] = useState([]);
+
+  // Magic Breakdown state
+  const [breakdownTask, setBreakdownTask] = useState(null);
+  const [breakdownShards, setBreakdownShards] = useState([]);
+  const [isBreakingDown, setIsBreakingDown] = useState(false);
 
   // Check auth on mount
   useEffect(() => {
@@ -155,18 +161,76 @@ function App() {
 
   const handleBreakdown = async (task) => {
     try {
-      const response = await fetch('/api/tasks/breakdown', {
+      setBreakdownTask(task);
+      setIsBreakingDown(true);
+
+      const response = await fetch(`/api/tasks/${task.id}/breakdown`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: task.id, content: task.content || task.title }),
+        body: JSON.stringify({ userId: user?.id || 'ishamm' }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBreakdownShards(data.shards || []);
+      } else {
+        const error = await response.json();
+        console.error('Breakdown failed:', error);
+        setIsBreakingDown(false);
+        setBreakdownTask(null);
+        alert('Failed to break down task: ' + (error.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error breaking down task:', error);
+      setIsBreakingDown(false);
+      setBreakdownTask(null);
+    }
+  };
+
+  const handleShardComplete = async (shard) => {
+    try {
+      const response = await fetch(`/api/tasks/${shard.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'complete' }),
       });
       if (response.ok) {
         const data = await response.json();
-        alert("Magic Breakdown Steps:\n" + data.steps.join("\n"));
+        // Check if parent was auto-completed
+        if (data.parentCompleted) {
+          // Remove parent from current tasks
+          setTasks(tasks.filter(t => t.id !== breakdownTask.id));
+        }
       }
     } catch (error) {
-      console.error("Error breaking down task:", error);
+      console.error('Error completing shard:', error);
     }
+  };
+
+  const handleShardDefer = async (shard) => {
+    try {
+      await fetch(`/api/tasks/${shard.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'deferred' }),
+      });
+    } catch (error) {
+      console.error('Error deferring shard:', error);
+    }
+  };
+
+  const handleBreakdownComplete = () => {
+    // All shards done, remove parent from task list
+    setTasks(tasks.filter(t => t.id !== breakdownTask?.id));
+    setIsBreakingDown(false);
+    setBreakdownTask(null);
+    setBreakdownShards([]);
+  };
+
+  const cancelBreakdown = () => {
+    setIsBreakingDown(false);
+    setBreakdownTask(null);
+    setBreakdownShards([]);
   };
 
   const handleJettison = async () => {
@@ -568,6 +632,19 @@ function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Magic Breakdown Animation Overlay */}
+      {(isBreakingDown || breakdownShards.length > 0) && (
+        <BreakdownAnimation
+          parentTask={breakdownTask}
+          shards={breakdownShards}
+          isBreaking={isBreakingDown && breakdownShards.length > 0}
+          onShardComplete={handleShardComplete}
+          onShardDefer={handleShardDefer}
+          onBreakdownComplete={handleBreakdownComplete}
+          onCancel={cancelBreakdown}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import Card from './Card';
 
-export default function CardStack({ tasks, onComplete, onDefer, onOpenDetails }) {
+export default function CardStack({ tasks, onComplete, onDefer, onOpenDetails, onLongPress }) {
     const activeTask = tasks[0];
     const nextTask = tasks[1];
     const thirdTask = tasks[2];
@@ -83,6 +83,7 @@ export default function CardStack({ tasks, onComplete, onDefer, onOpenDetails })
                             onSwipeRight={() => onComplete(activeTask.id)}
                             onSwipeLeft={() => onDefer(activeTask.id)}
                             onOpenDetails={onOpenDetails}
+                            onLongPress={onLongPress}
                             style={{ position: 'relative' }}
                         />
                     </motion.div>

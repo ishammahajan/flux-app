@@ -22,6 +22,7 @@ export default function Current({ tasks, onComplete, onDefer, onBreakdown, onOpe
                     onComplete={onComplete}
                     onDefer={onDefer}
                     onOpenDetails={onOpenDetails}
+                    onLongPress={onBreakdown}
                 />
             </div>
         </div>

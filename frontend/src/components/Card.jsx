@@ -1,4 +1,5 @@
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
+import { useRef, useCallback } from 'react';
 
 // Gravity-based visual styling
 const gravityStyles = {
@@ -28,7 +29,15 @@ const gravityStyles = {
     }
 };
 
-export default function Card({ task, onSwipeRight, onSwipeLeft, onOpenDetails, style, isInteractive = true }) {
+export default function Card({
+    task,
+    onSwipeRight,
+    onSwipeLeft,
+    onOpenDetails,
+    onLongPress,  // NEW: Callback for Magic Breakdown trigger
+    style,
+    isInteractive = true
+}) {
     const x = useMotionValue(0);
     const rotate = useTransform(x, [-200, 200], [-15, 15]);
     const opacity = useTransform(x, [-200, -100, 0, 100, 200], [0.5, 1, 1, 1, 0.5]);
@@ -39,8 +48,56 @@ export default function Card({ task, onSwipeRight, onSwipeLeft, onOpenDetails, s
 
     const gravity = gravityStyles[task.gravity_tag] || gravityStyles.default;
 
+    // Long-press detection state
+    const longPressTimer = useRef(null);
+    const isLongPress = useRef(false);
+    const startPos = useRef({ x: 0, y: 0 });
+
+    const startLongPress = useCallback((e) => {
+        if (!isInteractive || !onLongPress) return;
+
+        // Store start position to detect movement
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startPos.current = { x: clientX, y: clientY };
+        isLongPress.current = false;
+
+        longPressTimer.current = setTimeout(() => {
+            isLongPress.current = true;
+            // Haptic feedback
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+            onLongPress(task);
+        }, 500); // 500ms threshold
+    }, [isInteractive, onLongPress, task]);
+
+    const cancelLongPress = useCallback(() => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    }, []);
+
+    const handleMove = useCallback((e) => {
+        // Cancel if finger/mouse moved too much (user is dragging, not holding)
+        if (longPressTimer.current) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const moveThreshold = 10;
+
+            const deltaX = Math.abs(clientX - startPos.current.x);
+            const deltaY = Math.abs(clientY - startPos.current.y);
+
+            if (deltaX > moveThreshold || deltaY > moveThreshold) {
+                cancelLongPress();
+            }
+        }
+    }, [cancelLongPress]);
+
     const handleDragEnd = (event, info) => {
-        if (!isInteractive) return;
+        cancelLongPress();
+        if (!isInteractive || isLongPress.current) return;
 
         const threshold = 100;
         const velocity = info.velocity.x;
@@ -68,7 +125,7 @@ export default function Card({ task, onSwipeRight, onSwipeLeft, onOpenDetails, s
     };
 
     const handleTap = () => {
-        if (isInteractive && onOpenDetails) {
+        if (isInteractive && onOpenDetails && !isLongPress.current) {
             onOpenDetails(task);
         }
     };
@@ -81,6 +138,13 @@ export default function Card({ task, onSwipeRight, onSwipeLeft, onOpenDetails, s
             dragElastic={0.1}
             onDragEnd={handleDragEnd}
             onTap={handleTap}
+            onMouseDown={startLongPress}
+            onMouseUp={cancelLongPress}
+            onMouseLeave={cancelLongPress}
+            onMouseMove={handleMove}
+            onTouchStart={startLongPress}
+            onTouchEnd={cancelLongPress}
+            onTouchMove={handleMove}
             whileHover={isInteractive ? { scale: 1.02 } : {}}
             whileTap={isInteractive ? { scale: 0.98 } : {}}
             initial={{ scale: 0.9, opacity: 0 }}
@@ -144,10 +208,12 @@ export default function Card({ task, onSwipeRight, onSwipeLeft, onOpenDetails, s
                 )}
             </div>
 
-            {/* Tap hint */}
+            {/* Tap hint + long-press hint */}
             {isInteractive && (
                 <div className="absolute bottom-3 inset-x-0 text-center">
-                    <span className="text-white/20 text-xs">tap for details</span>
+                    <span className="text-white/20 text-xs">
+                        tap for details • hold to break down
+                    </span>
                 </div>
             )}
         </motion.div>

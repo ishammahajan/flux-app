@@ -40,7 +40,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 tags TEXT,
                 confidence_score REAL,
                 is_ambiguous INTEGER DEFAULT 0,
-                created_at TEXT
+                parent_task_id INTEGER,
+                shard_order INTEGER,
+                created_at TEXT,
+                FOREIGN KEY (parent_task_id) REFERENCES tasks(id)
             )`);
 
             // User profiles table
@@ -143,6 +146,21 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     });
                     console.log(`[Database] Seeded ${defaultUser.known_people.length} known people`);
                 }
+
+                // Seed a dummy task for testing Magic Breakdown
+                db.run(`INSERT OR IGNORE INTO tasks (content, title, description, status, gravity_tag, created_at) 
+                        SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS 
+                        (SELECT 1 FROM tasks WHERE title = ?)`, [
+                    'Clean the kitchen',
+                    'Clean the kitchen',
+                    'The kitchen needs a good clean - dishes, counters, floor',
+                    'inbox',
+                    'High',
+                    now,
+                    'Clean the kitchen'
+                ], (err) => {
+                    if (!err) console.log('[Database] Seeded dummy task for testing');
+                });
             }
         });
     }
