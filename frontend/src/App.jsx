@@ -6,6 +6,8 @@ import Airlock from './components/Airlock';
 import Login from './components/Login';
 import TaskDetails from './components/TaskDetails';
 import BreakdownAnimation from './components/BreakdownAnimation';
+import Settings from './components/Settings';
+import ProcessingStatus from './components/ProcessingStatus';
 
 function App() {
   // Auth state
@@ -43,6 +45,9 @@ function App() {
   // Quick reroll state
   const [showRerollOptions, setShowRerollOptions] = useState(false);
 
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
+
   // Task details modal state
   const [selectedTask, setSelectedTask] = useState(null);
   const [userProjects, setUserProjects] = useState([]);
@@ -51,6 +56,10 @@ function App() {
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [breakdownShards, setBreakdownShards] = useState([]);
   const [isBreakingDown, setIsBreakingDown] = useState(false);
+
+  // Global processing state
+  const [audioProcessingStatus, setAudioProcessingStatus] = useState(null);
+  const isProcessing = isBreakingDown || audioProcessingStatus !== null;
 
   // Check auth on mount
   useEffect(() => {
@@ -480,6 +489,14 @@ function App() {
         onOpenDetails={handleOpenDetails}
       />
 
+      {/* Processing Status Banner */}
+      {audioProcessingStatus && (
+        <ProcessingStatus status={audioProcessingStatus} type="audio" />
+      )}
+      {isBreakingDown && (
+        <ProcessingStatus status="analyzing" type="breakdown" />
+      )}
+
       {/* Safety Valves (Top Left) */}
       <div className="absolute top-4 left-4 sm:top-8 sm:left-8 flex flex-col sm:flex-row gap-2 sm:gap-3 z-20">
         <button
@@ -543,6 +560,13 @@ function App() {
         </div>
         <div className="flex items-center gap-2 sm:ml-2 sm:pl-4 sm:border-l border-white/10">
           <span className="text-xs sm:text-sm text-white/50">{user.display_name || user.id}</span>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="text-xs text-white/30 hover:text-white/60 transition-colors"
+            title="Settings"
+          >
+            ⚙️
+          </button>
           <button
             onClick={handleLogout}
             className="text-xs text-white/30 hover:text-white/60 transition-colors"
@@ -609,7 +633,12 @@ function App() {
           </button>
         </div>
 
-        <Vault onCapture={handleCapture} userId={user.id} />
+        <Vault
+          onCapture={handleCapture}
+          userId={user.id}
+          onProcessingChange={setAudioProcessingStatus}
+          isBlocked={isBreakingDown}
+        />
       </div>
 
       {/* Overlays */}
@@ -645,6 +674,19 @@ function App() {
           onCancel={cancelBreakdown}
         />
       )}
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettings && (
+          <Settings
+            user={user}
+            onClose={() => setShowSettings(false)}
+            onProfileUpdate={() => {
+              // Optionally refresh user data here
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

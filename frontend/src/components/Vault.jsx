@@ -1,11 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /**
  * Vault Component - The "Black Hole" Audio Capture
  * Pulsing dark circle that absorbs tasks via voice
  */
-export default function Vault({ onCapture, userId }) {
+export default function Vault({ onCapture, userId, onProcessingChange, isBlocked }) {
     const [isRecording, setIsRecording] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState(null);
@@ -15,7 +15,25 @@ export default function Vault({ onCapture, userId }) {
     const chunksRef = useRef([]);
     const streamRef = useRef(null);
 
+    // Emit processing status changes to parent
+    useEffect(() => {
+        if (onProcessingChange) {
+            if (isRecording) {
+                onProcessingChange('recording');
+            } else if (isProcessing) {
+                onProcessingChange(status === 'processing' ? 'transcribing' : status);
+            } else {
+                onProcessingChange(null);
+            }
+        }
+    }, [isRecording, isProcessing, status, onProcessingChange]);
+
     const startRecording = useCallback(async () => {
+        // Block if already processing elsewhere
+        if (isBlocked) {
+            return;
+        }
+
         try {
             setStatus('recording');
 
@@ -52,8 +70,9 @@ export default function Vault({ onCapture, userId }) {
         } catch (err) {
             console.error('Error starting recording:', err);
             setStatus('error');
+            if (onProcessingChange) onProcessingChange('error');
         }
-    }, []);
+    }, [isBlocked]);
 
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current && isRecording) {
@@ -64,12 +83,16 @@ export default function Vault({ onCapture, userId }) {
 
     const processAudio = async (audioBlob) => {
         setIsProcessing(true);
-        setStatus('processing');
+        setStatus('transcribing');
+        if (onProcessingChange) onProcessingChange('transcribing');
 
         try {
             const formData = new FormData();
             formData.append('audio', audioBlob, 'recording.webm');
             formData.append('user_id', userId || 'ishamm');
+
+            setStatus('analyzing');
+            if (onProcessingChange) onProcessingChange('analyzing');
 
             const response = await fetch('/api/audio/process', {
                 method: 'POST',
@@ -85,6 +108,7 @@ export default function Vault({ onCapture, userId }) {
             // Success animation
             setShowSuccess(true);
             setStatus('done');
+            if (onProcessingChange) onProcessingChange('done');
 
             if (onCapture) {
                 onCapture(data.task, data.transcript);
@@ -94,20 +118,25 @@ export default function Vault({ onCapture, userId }) {
                 setShowSuccess(false);
                 setStatus(null);
                 setIsProcessing(false);
+                if (onProcessingChange) onProcessingChange(null);
             }, 1500);
 
         } catch (err) {
             console.error('Error processing audio:', err);
             setStatus('error');
+            if (onProcessingChange) onProcessingChange('error');
             setTimeout(() => {
                 setStatus(null);
                 setIsProcessing(false);
+                if (onProcessingChange) onProcessingChange(null);
             }, 2000);
         }
     };
 
     const handleClick = () => {
         if (isProcessing) return;
+        if (isBlocked) return;
+
         if (isRecording) {
             stopRecording();
         } else {
@@ -115,38 +144,32 @@ export default function Vault({ onCapture, userId }) {
         }
     };
 
+    const isDisabled = isProcessing || isBlocked;
+
     return (
         <div className="relative flex flex-col items-center">
-            {/* Status text - minimal */}
-            <AnimatePresence>
-                {status && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className={`
-                            absolute -top-8 text-xs px-3 py-1 rounded-full backdrop-blur-sm
-                            ${status === 'error' ? 'text-red-300 bg-red-500/20' :
-                                status === 'done' ? 'text-green-300 bg-green-500/20' :
-                                    'text-white/50 bg-white/5'}
-                        `}
-                    >
-                        {status === 'recording' ? 'listening...' :
-                            status === 'processing' ? 'absorbing...' :
-                                status === 'done' ? 'captured' :
-                                    status === 'error' ? 'failed' : ''}
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* Blocked indicator */}
+            {isBlocked && !isRecording && !isProcessing && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute -top-8 text-xs px-3 py-1 rounded-full text-amber-300 bg-amber-500/20 whitespace-nowrap"
+                >
+                    Processing in progress...
+                </motion.div>
+            )}
 
             {/* The Black Hole Button */}
             <motion.button
                 onClick={handleClick}
-                disabled={isProcessing && !isRecording}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-full focus:outline-none disabled:cursor-wait"
-                aria-label={isRecording ? 'Stop Recording' : 'Start Recording'}
+                disabled={isDisabled && !isRecording}
+                whileHover={!isDisabled ? { scale: 1.05 } : {}}
+                whileTap={!isDisabled ? { scale: 0.95 } : {}}
+                className={`
+                    relative w-16 h-16 sm:w-18 sm:h-18 rounded-full focus:outline-none
+                    ${isDisabled && !isRecording ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                `}
+                aria-label={isRecording ? 'Stop Recording' : isBlocked ? 'Processing in progress' : 'Start Recording'}
             >
                 {/* Outer glow ring - always pulsing subtly */}
                 <motion.div
@@ -161,7 +184,7 @@ export default function Vault({ onCapture, userId }) {
                     }}
                     className={`
                         absolute inset-0 rounded-full
-                        ${isRecording ? 'bg-red-500' : showSuccess ? 'bg-green-500' : 'bg-white/20'}
+                        ${isRecording ? 'bg-red-500' : showSuccess ? 'bg-green-500' : isBlocked ? 'bg-amber-500/50' : 'bg-white/20'}
                     `}
                 />
 
@@ -176,7 +199,8 @@ export default function Vault({ onCapture, userId }) {
                         ${isRecording ? 'bg-red-600' :
                             isProcessing ? 'bg-stone' :
                                 showSuccess ? 'bg-green-600' :
-                                    'bg-gradient-to-b from-stone to-void border border-white/10'}
+                                    isBlocked ? 'bg-stone/50' :
+                                        'bg-gradient-to-b from-stone to-void border border-white/10'}
                     `}
                 >
                     {isRecording ? (
@@ -204,7 +228,7 @@ export default function Vault({ onCapture, userId }) {
                         </motion.span>
                     ) : (
                         // Mic icon
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-white/70">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-7 h-7 ${isBlocked ? 'text-white/30' : 'text-white/70'}`}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
                         </svg>
                     )}

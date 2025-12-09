@@ -30,6 +30,22 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // =============================================================================
+// HEALTHCHECK (No auth required)
+// =============================================================================
+
+/**
+ * Health check endpoint for Railway
+ * GET /health
+ */
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        service: 'flux-api'
+    });
+});
+
+// =============================================================================
 // AUTHENTICATION
 // =============================================================================
 
