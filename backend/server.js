@@ -46,29 +46,107 @@ app.get('/health', (req, res) => {
 });
 
 // =============================================================================
-// AUTHENTICATION
+// AUTHENTICATION (Email OTP)
 // =============================================================================
 
-/**
- * Login endpoint
- * POST /api/auth/login
- */
-app.post('/api/auth/login', (req, res) => {
-    const { username, password } = req.body;
+const {
+    isEmailAllowed,
+    createOTP,
+    sendOTPEmail,
+    verifyOTP,
+    checkRateLimit,
+    OTP_EXPIRY_MINUTES
+} = require('./services/otpService');
 
-    if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password required' });
+/**
+ * Request OTP endpoint
+ * POST /api/auth/request-otp
+ */
+app.post('/api/auth/request-otp', async (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
     }
 
-    db.get('SELECT * FROM user_profiles WHERE id = ?', [username], (err, user) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+    // Check if email is in allowlist
+    if (!isEmailAllowed(email)) {
+        return res.status(403).json({ error: 'Email not authorized' });
+    }
+
+    try {
+        // Check rate limit
+        const canRequest = await checkRateLimit(email, db);
+        if (!canRequest) {
+            return res.status(429).json({ error: 'Too many requests. Please wait before trying again.' });
         }
+
+        // Create OTP in database
+        const otp = await createOTP(email, db);
+
+        // Send OTP email via Resend
+        await sendOTPEmail(email, otp);
+
+        res.json({
+            success: true,
+            message: 'OTP sent to your email',
+            expiresInMinutes: OTP_EXPIRY_MINUTES
+        });
+
+    } catch (error) {
+        console.error('[Auth] OTP request error:', error);
+        res.status(500).json({ error: 'Failed to send OTP. Please try again.' });
+    }
+});
+
+/**
+ * Verify OTP endpoint
+ * POST /api/auth/verify-otp
+ */
+app.post('/api/auth/verify-otp', async (req, res) => {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+        return res.status(400).json({ error: 'Email and code are required' });
+    }
+
+    try {
+        // Verify OTP
+        const result = await verifyOTP(email, code, db);
+
+        if (!result.valid) {
+            return res.status(401).json({ error: result.error });
+        }
+
+        // Get or create user profile
+        let user = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM user_profiles WHERE id = ?', [email.toLowerCase()], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        // If user doesn't exist, create minimal profile
         if (!user) {
-            return res.status(401).json({ error: 'User not found' });
-        }
-        if (user.password !== password) {
-            return res.status(401).json({ error: 'Invalid password' });
+            const now = new Date().toISOString();
+            await new Promise((resolve, reject) => {
+                db.run(
+                    `INSERT INTO user_profiles (id, display_name, timezone, created_at, updated_at) 
+                     VALUES (?, ?, ?, ?, ?)`,
+                    [email.toLowerCase(), email.split('@')[0], 'UTC', now, now],
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+
+            user = await new Promise((resolve, reject) => {
+                db.get('SELECT * FROM user_profiles WHERE id = ?', [email.toLowerCase()], (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                });
+            });
         }
 
         // Parse JSON fields
@@ -87,7 +165,11 @@ app.post('/api/auth/login', (req, res) => {
             success: true,
             user
         });
-    });
+
+    } catch (error) {
+        console.error('[Auth] OTP verify error:', error);
+        res.status(500).json({ error: 'Verification failed. Please try again.' });
+    }
 });
 
 /**

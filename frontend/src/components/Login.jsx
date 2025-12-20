@@ -1,32 +1,63 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 /**
- * Login - Entry point with FLUX branding
+ * Login - Email OTP Authentication Flow
  * Minimal, atmospheric, no-demand feel
  */
 export default function Login({ onLogin }) {
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
+    const [email, setEmail] = useState('');
+    const [code, setCode] = useState('');
+    const [step, setStep] = useState('email'); // 'email' | 'code'
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState(null);
 
-    const handleSubmit = async (e) => {
+    const handleRequestOTP = async (e) => {
         e.preventDefault();
         setError(null);
+        setMessage(null);
         setLoading(true);
 
         try {
-            const response = await fetch('/api/auth/login', {
+            const response = await fetch('/api/auth/request-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({ email }),
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Login failed');
+                throw new Error(data.error || 'Failed to send code');
+            }
+
+            setMessage('Check your email for the login code');
+            setStep('code');
+
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleVerifyOTP = async (e) => {
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
+
+        try {
+            const response = await fetch('/api/auth/verify-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, code }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Verification failed');
             }
 
             localStorage.setItem('flux_user', JSON.stringify(data.user));
@@ -37,6 +68,13 @@ export default function Login({ onLogin }) {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleBack = () => {
+        setStep('email');
+        setCode('');
+        setError(null);
+        setMessage(null);
     };
 
     return (
@@ -73,62 +111,128 @@ export default function Login({ onLogin }) {
                     </motion.p>
                 </div>
 
-                {/* Login Form */}
-                <motion.form
-                    onSubmit={handleSubmit}
-                    className="space-y-4"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                >
-                    <input
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="username"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/30 focus:outline-none focus:border-white/25 transition-colors"
-                        autoFocus
-                        autoComplete="username"
-                    />
-
-                    <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="password"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/30 focus:outline-none focus:border-white/25 transition-colors"
-                        autoComplete="current-password"
-                    />
-
-                    {error && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="text-red-400/80 text-sm text-center py-2"
+                <AnimatePresence mode="wait">
+                    {step === 'email' ? (
+                        /* Email Step */
+                        <motion.form
+                            key="email-form"
+                            onSubmit={handleRequestOTP}
+                            className="space-y-4"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.3 }}
                         >
-                            {error}
-                        </motion.div>
-                    )}
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="email"
+                                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/30 focus:outline-none focus:border-white/25 transition-colors"
+                                autoFocus
+                                autoComplete="email"
+                            />
 
-                    <motion.button
-                        type="submit"
-                        disabled={loading || !username || !password}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="w-full bg-white/10 hover:bg-white/15 text-white py-4 rounded-xl font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                        {loading ? (
-                            <motion.span
-                                animate={{ opacity: [0.5, 1, 0.5] }}
-                                transition={{ duration: 1.5, repeat: Infinity }}
+                            {error && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="text-red-400/80 text-sm text-center py-2"
+                                >
+                                    {error}
+                                </motion.div>
+                            )}
+
+                            <motion.button
+                                type="submit"
+                                disabled={loading || !email}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className="w-full bg-white/10 hover:bg-white/15 text-white py-4 rounded-xl font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                                entering...
-                            </motion.span>
-                        ) : (
-                            'enter'
-                        )}
-                    </motion.button>
-                </motion.form>
+                                {loading ? (
+                                    <motion.span
+                                        animate={{ opacity: [0.5, 1, 0.5] }}
+                                        transition={{ duration: 1.5, repeat: Infinity }}
+                                    >
+                                        sending...
+                                    </motion.span>
+                                ) : (
+                                    'send code'
+                                )}
+                            </motion.button>
+                        </motion.form>
+                    ) : (
+                        /* Code Verification Step */
+                        <motion.form
+                            key="code-form"
+                            onSubmit={handleVerifyOTP}
+                            className="space-y-4"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            {message && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="text-white/50 text-sm text-center py-2"
+                                >
+                                    {message}
+                                </motion.div>
+                            )}
+
+                            <input
+                                type="text"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                placeholder="6-digit code"
+                                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/30 focus:outline-none focus:border-white/25 transition-colors text-center text-2xl tracking-[0.5em] font-mono"
+                                autoFocus
+                                inputMode="numeric"
+                                maxLength={6}
+                            />
+
+                            {error && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="text-red-400/80 text-sm text-center py-2"
+                                >
+                                    {error}
+                                </motion.div>
+                            )}
+
+                            <motion.button
+                                type="submit"
+                                disabled={loading || code.length !== 6}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className="w-full bg-white/10 hover:bg-white/15 text-white py-4 rounded-xl font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {loading ? (
+                                    <motion.span
+                                        animate={{ opacity: [0.5, 1, 0.5] }}
+                                        transition={{ duration: 1.5, repeat: Infinity }}
+                                    >
+                                        verifying...
+                                    </motion.span>
+                                ) : (
+                                    'verify'
+                                )}
+                            </motion.button>
+
+                            <button
+                                type="button"
+                                onClick={handleBack}
+                                className="w-full text-white/30 hover:text-white/50 text-sm py-2 transition-colors"
+                            >
+                                use a different email
+                            </button>
+                        </motion.form>
+                    )}
+                </AnimatePresence>
             </motion.div>
         </div>
     );

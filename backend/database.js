@@ -90,6 +90,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 FOREIGN KEY (task_id) REFERENCES tasks(id)
             )`);
 
+            // OTP codes table (for email authentication)
+            db.run(`CREATE TABLE IF NOT EXISTS otp_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                code TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )`);
+
             // Seed default user after tables are created
             if (defaultUser) {
                 const now = new Date().toISOString();
