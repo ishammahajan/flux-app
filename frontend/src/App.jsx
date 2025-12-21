@@ -14,7 +14,14 @@ function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [tasks, setTasks] = useState([]);
+  const [tasks, setTasks] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flux_tasks');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [showAirlock, setShowAirlock] = useState(false);
   const [gravity, setGravity] = useState(null);
 
@@ -81,6 +88,11 @@ function App() {
       localStorage.setItem('flux_side_quests', JSON.stringify(sideQuestHistory));
     }
   }, [sideQuestHistory]);
+
+  // Persist active tasks
+  useEffect(() => {
+    localStorage.setItem('flux_tasks', JSON.stringify(tasks));
+  }, [tasks]);
 
   // Side Quest timer effect
   useEffect(() => {
@@ -155,16 +167,19 @@ function App() {
     }
   };
 
-  const handleDefer = async (id) => {
-    try {
-      await fetch(`/api/tasks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'deferred' }),
-      });
-      setTasks(tasks.filter(t => t.id !== id));
-    } catch (error) {
-      console.error("Error deferring task:", error);
+  // Defer: Rotate to bottom of the deck (local only)
+  const handleDefer = (id) => {
+    // Move the deferred task to the end of the array
+    const taskIndex = tasks.findIndex(t => t.id === id);
+    if (taskIndex > -1) {
+      const newTasks = [...tasks];
+      const [deferredTask] = newTasks.splice(taskIndex, 1);
+
+      // Increment defer count to force re-render (fix for stuck animation)
+      deferredTask._deferCount = (deferredTask._deferCount || 0) + 1;
+
+      newTasks.push(deferredTask);
+      setTasks(newTasks);
     }
   };
 
@@ -197,6 +212,9 @@ function App() {
   };
 
   const handleShardComplete = async (shard) => {
+    // Remove from local state immediately for animation
+    setBreakdownShards(prev => prev.filter(s => s.id !== shard.id));
+
     try {
       const response = await fetch(`/api/tasks/${shard.id}`, {
         method: 'PATCH',
@@ -209,6 +227,9 @@ function App() {
         if (data.parentCompleted) {
           // Remove parent from current tasks
           setTasks(tasks.filter(t => t.id !== breakdownTask.id));
+          // Close breakdown if parent is done
+          setIsBreakingDown(false);
+          setBreakdownTask(null);
         }
       }
     } catch (error) {
@@ -216,16 +237,13 @@ function App() {
     }
   };
 
-  const handleShardDefer = async (shard) => {
-    try {
-      await fetch(`/api/tasks/${shard.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'deferred' }),
-      });
-    } catch (error) {
-      console.error('Error deferring shard:', error);
-    }
+  const handleShardDefer = (shard) => {
+    // Rotate to bottom of local shard stack
+    setBreakdownShards(prev => {
+      const newShards = prev.filter(s => s.id !== shard.id);
+      newShards.push(shard);
+      return newShards;
+    });
   };
 
   const handleBreakdownComplete = () => {
@@ -485,16 +503,15 @@ function App() {
         tasks={tasks}
         onComplete={handleComplete}
         onDefer={handleDefer}
+
         onBreakdown={handleBreakdown}
         onOpenDetails={handleOpenDetails}
+        onGravitySelect={handleGravitySelect}
       />
 
       {/* Processing Status Banner */}
       {audioProcessingStatus && (
         <ProcessingStatus status={audioProcessingStatus} type="audio" />
-      )}
-      {isBreakingDown && (
-        <ProcessingStatus status="analyzing" type="breakdown" />
       )}
 
       {/* Safety Valves (Top Left) */}
@@ -612,18 +629,29 @@ function App() {
             </div>
           )}
 
-          {/* Main button */}
+          {/* Main button - Reset if tasks exist, otherwise Calibrate */}
           <button
-            onClick={() => setShowAirlock(true)}
+            onClick={() => {
+              if (tasks.length > 0) {
+                // Reset: Clear tasks and gravity
+                setTasks([]);
+                setGravity(null);
+              } else {
+                // Open Airlock
+                setShowAirlock(true);
+              }
+            }}
             className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 ${gravity
               ? gravity === 'low' ? 'bg-green-500/20 border border-green-500/30'
                 : gravity === 'high' ? 'bg-red-500/20 border border-red-500/30'
                   : 'bg-yellow-500/20 border border-yellow-500/30'
               : 'bg-white/10 hover:bg-white/20'
               }`}
-            title="Calibrate / Reroll"
+            title={tasks.length > 0 ? "Reset (Clear Deck)" : "Calibrate / Reroll"}
           >
-            {gravity ? (
+            {tasks.length > 0 ? (
+              <span className="text-xl">↺</span>
+            ) : gravity ? (
               <span className="text-lg">{gravity === 'low' ? '🟢' : gravity === 'high' ? '🔴' : '🟡'}</span>
             ) : (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">

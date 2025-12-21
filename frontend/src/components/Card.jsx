@@ -152,7 +152,7 @@ export default function Card({
             exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.2 } }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
             className={`
-                absolute w-72 sm:w-80 rounded-3xl shadow-2xl border-2 overflow-hidden
+                absolute w-72 sm:w-80 min-h-[450px] rounded-3xl shadow-2xl border-2 overflow-hidden
                 flex flex-col items-center justify-center p-6 sm:p-8 text-center
                 cursor-grab active:cursor-grabbing select-none
                 bg-gradient-to-b from-stone to-stone/90

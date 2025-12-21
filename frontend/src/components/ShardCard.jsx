@@ -53,12 +53,13 @@ export default function ShardCard({
 
     return (
         <motion.div
-            initial={{ scale: 0, rotate: -10, opacity: 0 }}
+            initial={{ scale: 0, rotate: -10, opacity: 0, x: "-50%" }}
             animate={{
                 scale: isActive ? 1 : 0.85 - (index * 0.03),
                 rotate: 0,
                 opacity: isActive ? 1 : 0.4,
                 y: isActive ? 0 : (index - (total > 3 ? 1 : 0)) * 12,
+                x: "-50%",
                 zIndex: total - index
             }}
             exit={{ scale: 0, opacity: 0, x: 300 }}
@@ -78,8 +79,8 @@ export default function ShardCard({
             whileHover={isActive ? { scale: 1.02 } : {}}
             whileTap={isActive ? { scale: 0.98 } : {}}
             className={`
-                absolute left-1/2 -translate-x-1/2
-                w-64 sm:w-72 min-h-[180px] rounded-2xl shadow-xl border-2 overflow-hidden
+                absolute left-1/2
+                w-72 min-h-[400px] rounded-2xl shadow-xl border-2 overflow-hidden
                 flex flex-col items-center justify-center p-5 sm:p-6 text-center
                 cursor-grab active:cursor-grabbing select-none
                 bg-stone

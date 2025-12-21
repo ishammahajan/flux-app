@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import Card from './Card';
 
-export default function CardStack({ tasks, onComplete, onDefer, onOpenDetails, onLongPress }) {
+export default function CardStack({ tasks, onComplete, onDefer, onOpenDetails, onLongPress, onGravitySelect }) {
     const activeTask = tasks[0];
     const nextTask = tasks[1];
     const thirdTask = tasks[2];
@@ -18,9 +18,36 @@ export default function CardStack({ tasks, onComplete, onDefer, onOpenDetails, o
                     <div className="w-24 h-24 rounded-full bg-gradient-to-b from-white/5 to-transparent border border-white/10 flex items-center justify-center">
                         <span className="text-4xl opacity-30">∅</span>
                     </div>
-                    <div className="space-y-2">
-                        <p className="text-white/40 text-lg">Clear waters</p>
-                        <p className="text-white/20 text-sm">Calibrate gravity to surface tasks</p>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-white/40 text-lg">Clear waters</p>
+                            <p className="text-white/20 text-sm">Calibrate gravity to surface tasks</p>
+                        </div>
+
+                        {/* Quick Deal Buttons */}
+                        <div className="flex gap-4 pt-2 justify-center">
+                            <button
+                                onClick={() => onGravitySelect && onGravitySelect('low')}
+                                className="w-12 h-12 rounded-full bg-green-500/10 hover:bg-green-500/30 border border-green-500/20 flex items-center justify-center transition-all hover:scale-110"
+                                title="Low Gravity (Flow State)"
+                            >
+                                <span className="text-xl">🟢</span>
+                            </button>
+                            <button
+                                onClick={() => onGravitySelect && onGravitySelect('standard')}
+                                className="w-12 h-12 rounded-full bg-yellow-500/10 hover:bg-yellow-500/30 border border-yellow-500/20 flex items-center justify-center transition-all hover:scale-110"
+                                title="Standard Gravity"
+                            >
+                                <span className="text-xl">🟡</span>
+                            </button>
+                            <button
+                                onClick={() => onGravitySelect && onGravitySelect('high')}
+                                className="w-12 h-12 rounded-full bg-red-500/10 hover:bg-red-500/30 border border-red-500/20 flex items-center justify-center transition-all hover:scale-110"
+                                title="High Gravity (Survival Mode)"
+                            >
+                                <span className="text-xl">🔴</span>
+                            </button>
+                        </div>
                     </div>
                 </motion.div>
             </div>
@@ -30,7 +57,7 @@ export default function CardStack({ tasks, onComplete, onDefer, onOpenDetails, o
     return (
         <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
             {/* Stack container */}
-            <div className="relative w-72 sm:w-80 h-[28rem] sm:h-[26rem]">
+            <div className="relative w-72 sm:w-80 h-[35rem]">
                 <AnimatePresence mode="popLayout">
                     {/* Third Card (Bottom of visible stack) */}
                     {thirdTask && (
@@ -72,7 +99,7 @@ export default function CardStack({ tasks, onComplete, onDefer, onOpenDetails, o
 
                     {/* Top Card (Active - Interactive) */}
                     <motion.div
-                        key={`active-${activeTask.id}`}
+                        key={`active-${activeTask.id}-${activeTask._deferCount || 0}`}
                         initial={{ scale: 0.95, y: 20, opacity: 0.7 }}
                         animate={{ scale: 1, y: 0, opacity: 1 }}
                         transition={{ type: "spring", stiffness: 400, damping: 30 }}

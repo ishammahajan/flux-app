@@ -229,7 +229,7 @@ app.get('/api/tasks/bundle', (req, res) => {
     let gravityFilter;
     if (userGravity === 'high') {
         // User is overwhelmed → only give them easy (Low gravity) tasks
-        gravityFilter = `AND (gravity_tag = 'Low' OR gravity_tag IS NULL)`;
+        gravityFilter = `AND (gravity_tag = 'Low' OR gravity_tag IS NULL) AND parent_task_id IS NULL`;
     } else if (userGravity === 'low') {
         // User has energy → can handle anything, prioritize harder tasks
         gravityFilter = `ORDER BY CASE 
@@ -238,14 +238,14 @@ app.get('/api/tasks/bundle', (req, res) => {
             ELSE 3 END,`;
     } else {
         // Standard → mix of standard and low gravity tasks
-        gravityFilter = `AND (gravity_tag != 'High' OR gravity_tag IS NULL)`;
+        gravityFilter = `AND (gravity_tag != 'High' OR gravity_tag IS NULL) AND parent_task_id IS NULL`;
     }
 
     // Build query based on gravity
     let query;
     if (userGravity === 'low') {
         // For flow state: prioritize by task gravity (harder first)
-        query = `SELECT * FROM tasks WHERE status IN ('inbox', 'inbox_review') 
+        query = `SELECT * FROM tasks WHERE status IN ('inbox', 'inbox_review') AND parent_task_id IS NULL 
                  ORDER BY CASE 
                     WHEN gravity_tag = 'High' THEN 1 
                     WHEN gravity_tag = 'Standard' THEN 2 
@@ -275,7 +275,7 @@ app.get('/api/tasks/bundle', (req, res) => {
 // Get all inbox tasks (Vault view)
 app.get('/api/tasks/inbox', (req, res) => {
     db.all(
-        `SELECT * FROM tasks WHERE status IN ('inbox', 'inbox_review') 
+        `SELECT * FROM tasks WHERE status IN ('inbox', 'inbox_review') AND parent_task_id IS NULL 
          ORDER BY created_at DESC LIMIT 50`,
         [],
         (err, rows) => {
@@ -468,9 +468,12 @@ app.post('/api/tasks/:id/breakdown', async (req, res) => {
         // Check if already broken down
         const existingShards = await getShardsByParentId(id, db);
         if (existingShards.length > 0) {
+            // Filter out completed shards so they don't reappear
+            const activeShards = existingShards.filter(s => s.status !== 'complete');
+
             return res.json({
                 success: true,
-                shards: existingShards,
+                shards: activeShards,
                 message: 'Task already decomposed',
                 parentTask: { id: parentTask.id, title: parentTask.title }
             });

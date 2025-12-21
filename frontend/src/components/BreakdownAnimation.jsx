@@ -17,54 +17,46 @@ export default function BreakdownAnimation({
     onCancel
 }) {
     const [phase, setPhase] = useState('idle'); // idle | cracking | exploding | shards
-    const [activeShardIndex, setActiveShardIndex] = useState(0);
 
     useEffect(() => {
         if (isBreaking && shards.length > 0) {
-            // Start the breakdown animation sequence
-            setPhase('cracking');
+            // Start the breakdown animation sequence if not already showing shards
+            if (phase === 'idle') {
+                setPhase('cracking');
 
-            const crackTimer = setTimeout(() => {
-                setPhase('exploding');
-            }, 300);
+                const crackTimer = setTimeout(() => {
+                    setPhase('exploding');
+                }, 300);
 
-            const shardTimer = setTimeout(() => {
-                setPhase('shards');
-            }, 600);
+                const shardTimer = setTimeout(() => {
+                    setPhase('shards');
+                }, 600);
 
-            return () => {
-                clearTimeout(crackTimer);
-                clearTimeout(shardTimer);
-            };
+                return () => {
+                    clearTimeout(crackTimer);
+                    clearTimeout(shardTimer);
+                };
+            }
         } else if (!isBreaking) {
             setPhase('idle');
-            setActiveShardIndex(0);
+        } else if (shards.length === 0 && phase === 'shards') {
+            // All shards gone
+            if (onBreakdownComplete) {
+                onBreakdownComplete();
+            }
         }
     }, [isBreaking, shards.length]);
+
 
     const handleShardComplete = (shard) => {
         if (onShardComplete) {
             onShardComplete(shard);
-        }
-
-        // Move to next shard
-        if (activeShardIndex < shards.length - 1) {
-            setActiveShardIndex(prev => prev + 1);
-        } else {
-            // All shards complete
-            if (onBreakdownComplete) {
-                onBreakdownComplete();
-            }
         }
     };
 
     const handleShardDefer = (shard) => {
         if (onShardDefer) {
             onShardDefer(shard);
-        }
-        // Move shard to end or skip
-        if (activeShardIndex < shards.length - 1) {
-            setActiveShardIndex(prev => prev + 1);
         }
     };
 
@@ -104,6 +96,7 @@ export default function BreakdownAnimation({
             <button
                 onClick={onCancel}
                 className="absolute top-4 right-4 p-2 text-white/40 hover:text-white/80 transition-colors"
+                style={{ zIndex: 60 }} // Above cards
             >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -153,47 +146,40 @@ export default function BreakdownAnimation({
 
             {/* Shards stack (shows after parent explodes) */}
             <AnimatePresence>
-                {phase === 'shards' && (
+                {phase === 'shards' && shards.length > 0 && (
                     <div className="relative flex flex-col items-center">
-                        {/* Active shard indicator */}
+                        {/* Shard counter */}
                         <motion.div
                             initial={{ opacity: 0, y: -20 }}
                             animate={{ opacity: 1, y: 0 }}
                             className="text-white/60 text-sm mb-4"
                         >
-                            Shard {activeShardIndex + 1} of {shards.length}
+                            {shards.length} shards remaining
                         </motion.div>
 
                         {/* Shard stack - centered container */}
-                        <div className="relative flex items-center justify-center" style={{ height: '280px', width: '300px' }}>
-                            {shards.map((shard, index) => (
-                                <ShardCard
-                                    key={shard.id || index}
-                                    shard={shard}
-                                    index={index}
-                                    total={shards.length}
-                                    isActive={index === activeShardIndex}
-                                    onComplete={handleShardComplete}
-                                    onDefer={handleShardDefer}
-                                />
-                            ))}
-                        </div>
+                        <div className="relative flex items-center justify-center" style={{ height: '450px', width: '300px' }}>
+                            <AnimatePresence mode="popLayout">
+                                {shards.slice(0, 3).reverse().map((shard, i) => {
+                                    // Calculate actual index based on reverse slice (0 is top)
+                                    // slice(0,3) reversed order: [2, 1, 0] visually, but data is [0, 1, 2]
+                                    // We need to map visual stacking context
+                                    const index = shards.indexOf(shard);
+                                    const isTop = index === 0;
 
-                        {/* Progress dots */}
-                        <div className="flex gap-2 mt-4">
-                            {shards.map((_, index) => (
-                                <motion.div
-                                    key={index}
-                                    className={`
-                                        w-2 h-2 rounded-full
-                                        ${index < activeShardIndex ? 'bg-green-500' :
-                                            index === activeShardIndex ? 'bg-white' : 'bg-white/30'}
-                                    `}
-                                    animate={{
-                                        scale: index === activeShardIndex ? 1.2 : 1
-                                    }}
-                                />
-                            ))}
+                                    return (
+                                        <ShardCard
+                                            key={shard.id}
+                                            shard={shard}
+                                            index={index}
+                                            total={shards.length}
+                                            isActive={isTop}
+                                            onComplete={() => handleShardComplete(shard)}
+                                            onDefer={() => handleShardDefer(shard)}
+                                        />
+                                    );
+                                })}
+                            </AnimatePresence>
                         </div>
                     </div>
                 )}

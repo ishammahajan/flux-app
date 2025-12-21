@@ -17,7 +17,6 @@ export default function ProcessingStatus({ status, type }) {
             error: { text: 'Processing failed', color: 'red', icon: '✕', pulse: false },
         },
         breakdown: {
-            analyzing: { text: 'Breaking down task...', color: 'purple', icon: '🔮', pulse: true },
             creating: { text: 'Creating sub-tasks...', color: 'amber', icon: '✨', pulse: true },
             done: { text: 'Breakdown complete!', color: 'green', icon: '✓', pulse: false },
             error: { text: 'Breakdown failed', color: 'red', icon: '✕', pulse: false },

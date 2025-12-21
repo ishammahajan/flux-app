@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
  * Current - The monotropic execution view
  * "Stack of Cards" metaphor for screen-native task focus
  */
-export default function Current({ tasks, onComplete, onDefer, onBreakdown, onOpenDetails }) {
+export default function Current({ tasks, onComplete, onDefer, onBreakdown, onOpenDetails, onGravitySelect }) {
     return (
         <div className="flex flex-col items-center justify-center h-full relative overflow-hidden bg-void pointer-events-none">
             {/* Ambient Background - subtle gradient */}
@@ -23,6 +23,7 @@ export default function Current({ tasks, onComplete, onDefer, onBreakdown, onOpe
                     onDefer={onDefer}
                     onOpenDetails={onOpenDetails}
                     onLongPress={onBreakdown}
+                    onGravitySelect={onGravitySelect}
                 />
             </div>
         </div>
